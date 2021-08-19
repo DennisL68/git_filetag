@@ -3,31 +3,62 @@ function Set-FileTag {# store $FileTags as JSON in Git Notes
 }
 
 function Update-FileTag {
-    [array]$Properties = @(
+    [array]$Properties = @(# Categories to use
         'BaseName',
         'Extension',
         'Name',
-        'DisplayName',  #Original filename
-        'TechField',    #Field of technolgy the files is about
-        'DocType',      #What the file is used for, i.e. Reports, Manual, Request etc.
-        'Owner'         #Person repsonsible for the content of the document
+        'DisplayName',  # Original filename
+        'TechField',    # Field of technolgy the files is about
+        'DocType',      # What the file is used for, i.e. Reports, Manual, Request etc.
+        'Owner'         # Person repsonsible for the content of the document
     )
 
-    $Global:FileTags = ls | select $Properties | 
+    [array]$Ignore = @(# file types to omit
+        '.vscode',
+        '.git'
+    )
+<# TODO Remove very soon
+    $Global:FileTags = Get-ChildItem -File | where {$Ignore -notcontains $_.Extension} | # filter out extensions
+    select $Properties | 
     foreach { 
         if ($_.BaseName -notmatch '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}') {# don't touch added files (GUID) 
             $_.DisplayName = $_.Name; # keep original filename
             $_.BaseName = (New-Guid).ToString(); 
-            ren $_.Name ($_.BaseName + $_.Extension) # make filename unique
+            Rename-Item $_.Name ($_.BaseName + $_.Extension) # make filename unique
+            $_.Name = ($_.BaseName + $_.Extension)
         }; 
         $_
     }
+ #>    
+
+    $global:FileTags = Get-FileTag
     
+    #Handel new files
+    Get-ChildItem -Exclude $FileTags.Name |
+    where {$Ignore -notcontains $_.Extension} | # filter out extensions
+    select $Properties |
+    foreach {
+        $_.DisplayName = $_.Name; # keep original filename
+        $_.BaseName = (New-Guid).ToString()
+        #Rename-Item $_.Name ($_.BaseName + $_.Extension) # make filename unique
+        $_.Name = ($_.BaseName + $_.Extension)
+        $Global:FileTags += $_
+    }
+
+    # Build thick index tabels
+    $Global:GuidTable = @{}
+    $Global:NameTable = @{}
+    $FileTags | foreach {
+        $Global:GuidTable.add($_.Name,$_)
+        try {$Global:NameTable.add($_.DisplayName,$_)}
+        catch {Write-Error -Message 'Name table creation failed'}
+    }
+
     Set-FileTag
 }
 
 function Get-FileTag {# get file tags from Git Notes
-    $Global:FileTags = git log --format="%H`t%s`t%ai`t%N" -n 1 | 
+    git log --format="%H`t%s`t%ai`t%N" -n 1 | 
     ConvertFrom-Csv -Delimiter "`t" -Header ('CommitId','Message','Date','Note') | 
     select -ExpandProperty Note | ConvertFrom-Json
 }
