@@ -1,27 +1,40 @@
-function Set-FileTag {
+function Set-FileTag {# store $FileTags as JSON in Git Notes
     git notes add -f -m ($FileTags | ConvertTo-Json -Compress).replace('"',"'")
 }
 
 function Update-FileTag {
-     $Global:FileTags = ls | select BaseName,Extension,Name,DisplayName,TechField,DocType,Owner | 
-     foreach { 
-         if ($_.BaseName -notmatch '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}') {
-             $_.DisplayName = $_.Name; 
-             $_.BaseName = (New-Guid).ToString(); 
-             ren $_.Name ($_.BaseName + $_.Extension)
-         }; 
-         $_
-     }
-     Set-FileTag
+    [array]$Properties = @(
+        'BaseName',
+        'Extension',
+        'Name',
+        'DisplayName',  #Original filename
+        'TechField',    #Field of technolgy the files is about
+        'DocType',      #What the file is used for, i.e. Reports, Manual, Request etc.
+        'Owner'         #Person repsonsible for the content of the document
+    )
+
+    $Global:FileTags = ls | select $Properties | 
+    foreach { 
+        if ($_.BaseName -notmatch '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}') {# don't touch added files (GUID) 
+            $_.DisplayName = $_.Name; # keep original filename
+            $_.BaseName = (New-Guid).ToString(); 
+            ren $_.Name ($_.BaseName + $_.Extension) # make filename unique
+        }; 
+        $_
+    }
+    
+    Set-FileTag
 }
 
-function Get-FileTag {
-    $Global:FileTags = git log --format="%H`t%s`t%ai`t%N" -n 1 | ConvertFrom-Csv -Delimiter "`t" -Header ('CommitId','Message','Date','Note') | select -ExpandProperty Note | ConvertFrom-Json
+function Get-FileTag {# get file tags from Git Notes
+    $Global:FileTags = git log --format="%H`t%s`t%ai`t%N" -n 1 | 
+    ConvertFrom-Csv -Delimiter "`t" -Header ('CommitId','Message','Date','Note') | 
+    select -ExpandProperty Note | ConvertFrom-Json
 }
 
 <#
 .SYNOPSIS
-    Creates a object based on the files in the current directory and add 
+    Creates a PS Custom object based on the files in the current directory and add 
     fields for tagging the files.
 
     The tags can be used for filtering and grouping the directory content.
@@ -71,6 +84,30 @@ function Get-FileTag {
     $FileTags | where Owner -eq $ENV:USERNAME
 
     Show all the files owned by the current user.
+
+.EXAMPLE
+    $FileTags[1].TechField = 'MSSQL'
+    $FileTags[3].TechField = 'SharePoint'
+    $FileTags[4].TechField = 'SharePoint','PowerShell'
+
+    Set the TechField category for record 1,3 and 4
+
+.EXAMPLE
+    $FileTags[1].DocType = 'MonthlyReport'
+    $FileTags[2].DocType = 'Documentation'
+    $FileTags[3].DocType = 'MonthlyReport'
+
+    Set the DocType category for record 1,2 and 3
+
+.EXAMPLE
+    $FileTags | where DocType -eq 'MonthlyReport'
+
+    Get all MontlyReports
+
+.EXAMPLE
+    $FileTags | where TechField | ft -GroupBy TechField
+
+    Get all records that has a TechField and Group the output.
 
 .NOTES
     General notes
