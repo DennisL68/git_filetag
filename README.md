@@ -14,7 +14,7 @@ outside of any commits.
 * PowerShell
 
 ## Usage overview
-* Download the PowerShell module (just functions at the moment).
+* Download the PowerShell module (just a script at the moment that you need to . source).
 * Build the `$FileTag` variable and save it as a compressed JSON structure in Notes
 * Dice and slice the `FileTags` variable :)
 
